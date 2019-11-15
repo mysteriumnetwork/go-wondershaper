@@ -1,6 +1,9 @@
 .idea
 
+.vagrant
+
 # Binaries for programs and plugins
+build
 *.exe
 *.exe~
 *.dll
