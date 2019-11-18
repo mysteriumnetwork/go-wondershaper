@@ -13,7 +13,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 
 package wondershaper
@@ -187,12 +186,11 @@ func (s Shaper) LimitUplink(interfaceName string, limitKbps int) error {
 }
 
 // Clear clears the limits from the adapter
-func (s Shaper) Clear(interfaceName string) error {
+func (s Shaper) Clear(interfaceName string) {
 	_ = s.cmd("tc", "qdisc", "del", "dev", interfaceName, "root").Run()
 	_ = s.cmd("tc", "qdisc", "del", "dev", interfaceName, "ingress").Run()
 	_ = s.cmd("tc", "qdisc", "del", "dev", ifb, "root").Run()
 	_ = s.cmd("tc", "qdisc", "del", "dev", ifb, "ingress").Run()
-	return nil
 }
 
 // Status shows the current status of the adapter
