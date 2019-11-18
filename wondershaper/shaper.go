@@ -186,7 +186,12 @@ func (s Shaper) LimitUplink(interfaceName string, limitKbps int) error {
 	return cmd.Run()
 }
 
+// Clear clears the limits from the adapter
 func (s Shaper) Clear(interfaceName string) error {
+	_ = s.cmd("tc", "qdisc", "del", "dev", interfaceName, "root").Run()
+	_ = s.cmd("tc", "qdisc", "del", "dev", interfaceName, "ingress").Run()
+	_ = s.cmd("tc", "qdisc", "del", "dev", ifb, "root").Run()
+	_ = s.cmd("tc", "qdisc", "del", "dev", ifb, "ingress").Run()
 	return nil
 }
 
