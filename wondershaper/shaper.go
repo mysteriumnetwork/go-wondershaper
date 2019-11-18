@@ -38,13 +38,50 @@ func New() *Shaper {
 	return &Shaper{}
 }
 
-type LimitOptions struct {
-	downloadKbps uint
-	uploadKbps   uint
-}
+// LimitDownlink limits download speed of the specified network interface.
+func (s Shaper) LimitDownlink(interfaceName string, limitKbps int) error {
+	cmd := s.cmd("tc", "qdisc", "add", "dev", interfaceName, "root", "handle", "1:", "htb",
+		"default", "20")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
 
-func (s Shaper) Limit(interfaceName string, options LimitOptions) error {
-	return nil
+	// Add the IFB interface
+	cmd = s.cmd("modprobe", "ifb", "numifbs=1")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	cmd = s.cmd("ip", "link", "set", "dev", ifb, "up")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// Redirect ingress (incoming) to egress ifb0
+	cmd = s.cmd("tc", "qdisc", "add", "dev", interfaceName, "handle", "ffff:", "ingress")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	cmd = s.cmd("tc", "filter", "add", "dev", interfaceName, "parent", "ffff:", "protocol", "ip", "u32", "match", "u32", "0", "0",
+		"action", "mirred", "egress", "redirect", "dev", ifb,
+	)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// Add class and rules for virtual
+	cmd = s.cmd("tc", "qdisc", "add", "dev", ifb, "root", "handle", "2:", "htb")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	rate := strconv.Itoa(limitKbps) + "kbit"
+	cmd = s.cmd("tc", "class", "add", "dev", ifb, "parent", "2:", "classid", "2:1", "htb", "rate", rate)
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// Add filter to rule for IP address
+	cmd = s.cmd("tc", "filter", "add", "dev", ifb, "protocol", "ip", "parent", "2:", "prio", "1", "u32", "match", "ip", "src", "0.0.0.0/0", "flowid", "2:1")
+	return cmd.Run()
 }
 
 // LimitUplink limits upload speed of the specified network interface.
