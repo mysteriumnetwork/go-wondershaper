@@ -21,6 +21,7 @@ import (
 	"io"
 	"os/exec"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -39,14 +40,12 @@ func New() *Shaper {
 
 // LimitDownlink limits download speed of the specified network interface.
 func (s Shaper) LimitDownlink(interfaceName string, limitKbps int) error {
-	cmd := s.cmd("tc", "qdisc", "add", "dev", interfaceName, "root", "handle", "1:", "htb",
-		"default", "20")
-	if err := cmd.Run(); err != nil {
+	if err := s.installRootHTB(interfaceName); err != nil {
 		return err
 	}
 
 	// Add the IFB interface
-	cmd = s.cmd("modprobe", "ifb", "numifbs=1")
+	cmd := s.cmd("modprobe", "ifb", "numifbs=1")
 	if err := cmd.Run(); err != nil {
 		return err
 	}
@@ -85,15 +84,12 @@ func (s Shaper) LimitDownlink(interfaceName string, limitKbps int) error {
 
 // LimitUplink limits upload speed of the specified network interface.
 func (s Shaper) LimitUplink(interfaceName string, limitKbps int) error {
-	// Install root HTB
-	cmd := s.cmd("tc", "qdisc", "add", "dev", interfaceName, "root", "handle", "1:", "htb",
-		"default", "20")
-	if err := cmd.Run(); err != nil {
+	if err := s.installRootHTB(interfaceName); err != nil {
 		return err
 	}
 
 	rate := strconv.Itoa(limitKbps) + "kbit"
-	cmd = s.cmd("tc", "class", "add", "dev", interfaceName, "parent", "1:", "classid", "1:1", "htb",
+	cmd := s.cmd("tc", "class", "add", "dev", interfaceName, "parent", "1:", "classid", "1:1", "htb",
 		"rate", rate,
 		"prio", "5",
 	)
@@ -200,6 +196,20 @@ func (s Shaper) Status(interfaceName string) error {
 		return err
 	}
 	cmd = s.cmd("tc", "-s", "class", "ls", "dev", interfaceName)
+	return cmd.Run()
+}
+
+func (s Shaper) installRootHTB(interfaceName string) error {
+	out, err := exec.Command("tc", "-s", "qdisc", "ls", "dev", interfaceName).CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	if strings.Contains(string(out), "qdisc htb 1: root") {
+		return nil
+	}
+
+	cmd := s.cmd("tc", "qdisc", "add", "dev", interfaceName, "root", "handle", "1:", "htb", "default", "20")
 	return cmd.Run()
 }
 
